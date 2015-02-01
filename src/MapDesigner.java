@@ -7,6 +7,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
@@ -192,11 +193,12 @@ public class MapDesigner {
 		JFileChooser fileChooser = new JFileChooser();
 		fileChooser.setApproveButtonText("Save");
 		fileChooser.setDialogTitle("Save Map");
+		fileChooser.setFileFilter(new FileNameExtensionFilter("JavaChallenge Map File", "jcm"));
 		int result = fileChooser.showOpenDialog(frame);
 		if (result == JFileChooser.APPROVE_OPTION) {
 			File selected = fileChooser.getSelectedFile();
 			try {
-				Files.write(selected.toPath(), toJson().getBytes(ENCODING), StandardOpenOption.CREATE);
+				Files.write(selected.toPath(), toJson().getBytes(ENCODING), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 			} catch (IOException e) {
 				JOptionPane.showMessageDialog(frame, e);
 			}
@@ -207,6 +209,7 @@ public class MapDesigner {
 		JFileChooser fileChooser = new JFileChooser();
 		fileChooser.setApproveButtonText("Load");
 		fileChooser.setDialogTitle("Load Map");
+		fileChooser.setFileFilter(new FileNameExtensionFilter("JavaChallenge Map File", "jcm"));
 		int result = fileChooser.showOpenDialog(frame);
 		if (result == JFileChooser.APPROVE_OPTION) {
 			File selected = fileChooser.getSelectedFile();
@@ -251,6 +254,7 @@ public class MapDesigner {
 				map.reset();
 				repaintFields();
 				updateCellColors();
+				updateObjectColors();
 			} catch (IOException e) {
 				JOptionPane.showMessageDialog(frame, e);
 			}
@@ -265,7 +269,7 @@ public class MapDesigner {
 				.append("\t\"cellKeys\": ").append(Cell.properties()).append(",\n")
 				.append("\t\"cellDefaults\": ").append(Cell.sDefault).append(",\n")
 				.append("\t\"cellColoring\": ").append('"').append(cellColor[0]).append(',').append(cellColor[1]).append(',').append(cellColor[2]).append('"').append(",\n")
-				.append("\t\"cells\": ").append(Arrays.deepToString(cells)).append("\n")
+				.append("\t\"cells\": ").append(Arrays.deepToString(cells)).append(",\n")
 				.append("\t\"objectKeys\": ").append(GameObject.properties()).append(",\n")
 				.append("\t\"objectDefaults\": ").append(GameObject.sDefault).append(",\n")
 				.append("\t\"objectColoring\": ").append('"').append(objectColor[0]).append(',').append(objectColor[1]).append(',').append(objectColor[2]).append('"').append(",\n")
@@ -340,14 +344,13 @@ public class MapDesigner {
 		else
 			objectFields.forEach(fieldsPanel::add);
 		fieldsPanel.revalidate();
+		fieldsPanel.repaint();
 	}
 
 	public static void onClick(Point p) {
-		if (p.x < 0 || p.x > w || p.y < 0 || p.y > h)
+		if (p.x < 0 || p.x >= w || p.y < 0 || p.y >= h)
 			return;
 		if (removeMode) {
-			if (cellMode)
-				return;
 			cells[p.y][p.x].object = null;
 			map.repaint();
 			return;

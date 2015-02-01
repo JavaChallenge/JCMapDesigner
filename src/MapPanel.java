@@ -23,7 +23,8 @@ public class MapPanel extends JComponent {
             @Override
             public void mousePressed(MouseEvent e) {
                 mouseBtn[e.getButton()] = true;
-                MapDesigner.onClick(getMapPoint(e.getPoint()));
+                if (e.getButton() == 1)
+                    MapDesigner.onClick(getMapPoint(e.getPoint()));
             }
 
             @Override
