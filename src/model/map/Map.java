@@ -96,4 +96,13 @@ public class Map {
         return mColoring[0] + ", " + mColoring[1] + ", " + mColoring[2];
     }
 
+    public void completeLoading() {
+        for (int x = 0; x < mW; x++)
+            for (int y = 0; y < mH; y++) {
+                mCells[y][x].setX(x);
+                mCells[y][x].setY(y);
+                mCells[y][x].completeLoading();
+            }
+    }
+
 }

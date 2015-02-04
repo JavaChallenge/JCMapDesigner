@@ -1,0 +1,125 @@
+package parser;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.HashMap;
+
+public class MapParser {
+
+    public static final Charset ENCODING = Charset.forName("UTF-8");
+
+    private MapParser() {}
+
+    public static Map parse(File file) throws IOException {
+        return parse(new String(Files.readAllBytes(file.toPath()), ENCODING));
+    }
+
+    public static Map parse(String json) {
+        return parse(new Gson().fromJson(json, JsonObject.class));
+    }
+
+    public static Map parse(JsonObject root) {
+        JsonObject jmap = root.getAsJsonObject("map");
+        int w = jmap.get("width").getAsInt();
+        int h = jmap.get("height").getAsInt();
+        Map map = new Map(w, h);
+
+        JsonArray jkeys = jmap.get("keys").getAsJsonArray();
+        String keys[] = new String[jkeys.size()];
+        for (int i = 0; i < jkeys.size(); i++)
+            keys[i] = jkeys.get(i).getAsString();
+
+        Field[] fields = new Field[keys.length];
+        for (int i = 0; i < keys.length; i++)
+            try {
+                fields[i] = Cell.class.getDeclaredField("m" + toCamelCase(keys[i]));
+                fields[i].setAccessible(true);
+            } catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            }
+
+        JsonArray rows = jmap.getAsJsonArray("cells");
+        for (int y = 0; y < h; y++) {
+            JsonArray row = rows.get(y).getAsJsonArray();
+            for (int x = 0; x < w; x++) {
+                JsonArray jcell = row.get(x).getAsJsonObject().getAsJsonArray("values");
+                Cell cell = new Cell(x, y);
+                for (int i = 0; i < fields.length; i++)
+                    if (fields[i] != null)
+                        try {
+                            fields[i].set(cell, jcell.get(i).getAsNumber());
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        }
+                map.set(x, y, cell);
+            }
+        }
+
+        JsonArray jobjs = root.getAsJsonArray("objects");
+        for (int i = 0; i < jobjs.size(); i++) {
+            JsonObject jobj = jobjs.get(i).getAsJsonObject();
+            String name = jobj.get("name").getAsString();
+
+            JsonArray jokeys = jobj.getAsJsonArray("keys");
+            String[] okeys = new String[jokeys.size()];
+            for (int j = 0; j < okeys.length; j++)
+                okeys[j] = jokeys.get(j).getAsString();
+
+            try {
+                Class oc = Class.forName(toCamelCase(name));
+                Field[] ofields = new Field[okeys.length];
+                for (int j = 0; j < ofields.length; j++)
+                    try {
+                        ofields[j] = oc.getDeclaredField("m"+toCamelCase(okeys[j]));
+                        ofields[j].setAccessible(true);
+                    } catch (NoSuchFieldException e) {
+                        e.printStackTrace();
+                    }
+
+                JsonArray objs = jobj.getAsJsonArray("instances");
+                for (int j = 0; j < objs.size(); j++) {
+                    JsonObject obj = objs.get(j).getAsJsonObject();
+                    int x = obj.get("x").getAsInt();
+                    int y = obj.get("y").getAsInt();
+                    JsonArray vals = obj.getAsJsonArray("values");
+                    try {
+                        GameObject o = (GameObject) oc.newInstance();
+                        o.setX(x);
+                        o.setY(y);
+                        for (int k = 0; k < ofields.length; k++)
+                            if (ofields[k] != null)
+                                try {
+                                    ofields[k].set(o, vals.get(k).getAsNumber());
+                                } catch (IllegalAccessException e) {
+                                    e.printStackTrace();
+                                }
+                        map.at(x, y).addObject(o);
+                    } catch (InstantiationException | IllegalAccessException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return map;
+    }
+
+    private static String toCamelCase(String str) {
+        StringBuilder sb = new StringBuilder();
+        String[] parts = str.replaceAll("[^ a-zA-Z0-9]", "").split("\\s+");
+        for (String part : parts)
+            sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1).toLowerCase());
+        return sb.toString();
+    }
+
+}

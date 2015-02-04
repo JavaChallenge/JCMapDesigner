@@ -12,10 +12,7 @@ import java.util.ArrayList;
  */
 public class Cell {
 
-    @Expose@SerializedName("x")
-    private int mX;
-    @Expose@SerializedName("y")
-    private int mY;
+    private int mX, mY;
     @Expose@SerializedName("values")
     private ArrayList<Number> mValues = new ArrayList<>();
     private ArrayList<GameObject> mObjects = new ArrayList<>();
@@ -32,6 +29,14 @@ public class Cell {
 
     public int getY() {
         return mY;
+    }
+
+    void setX(int x) {
+        mX = x;
+    }
+
+    void setY(int y) {
+        mY = y;
     }
 
     public void addObject(GameObject object) {

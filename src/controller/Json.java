@@ -8,11 +8,8 @@ import com.google.gson.GsonBuilder;
  */
 public class Json {
 
-    private static GsonBuilder builder = new GsonBuilder().setPrettyPrinting().excludeFieldsWithoutExposeAnnotation();
-    private static Gson sGson = builder.create();
+    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().excludeFieldsWithoutExposeAnnotation().create();
 
-    public static Gson gson() {
-        return sGson;
-    }
+    public static final Gson CGSON = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 
 }

@@ -13,6 +13,8 @@ public class Menu extends JMenuBar {
     private JMenuItem mNewMap = new JMenuItem("New Map");
     private JMenuItem mLoadMap = new JMenuItem("Load Map");
     private JMenuItem mSaveMap = new JMenuItem("Save Map");
+    private JMenuItem mSaveCompMap = new JMenuItem("Save Map (Compressed)");
+    private JMenuItem mGenClasses = new JMenuItem("Generate Java Classes");
 
     private JMenuItem mDefineColoring = new JMenuItem("Define Coloring");
 
@@ -23,6 +25,8 @@ public class Menu extends JMenuBar {
         mFileMenu.add(mNewMap);
         mFileMenu.add(mLoadMap);
         mFileMenu.add(mSaveMap);
+        mFileMenu.add(mSaveCompMap);
+        mFileMenu.add(mGenClasses);
 
         mOptionsMenu.add(mDefineColoring);
     }
@@ -45,6 +49,14 @@ public class Menu extends JMenuBar {
 
     public JMenuItem getSaveMap() {
         return mSaveMap;
+    }
+
+    public JMenuItem getSaveCompMap() {
+        return mSaveCompMap;
+    }
+
+    public JMenuItem getGenClasses() {
+        return mGenClasses;
     }
 
     public JMenuItem getDefineColoring() {

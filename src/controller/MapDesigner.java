@@ -7,6 +7,7 @@ import model.map.Cell;
 import model.map.Map;
 import model.object.GameObject;
 import model.object.GameObjectType;
+import parser.MapParser;
 import view.MainView;
 import view.PropertiesView;
 import view.SingleStructure;
@@ -16,18 +17,23 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Created by Hadi on 2/3/2015 10:45 AM.
@@ -58,8 +64,10 @@ public class MapDesigner {
         // init menu bar
         mMainView.getMenu().getNewMap().addActionListener(e -> onNewMapClicked());
         mMainView.getMenu().getLoadMap().addActionListener(e -> onLoadMapClicked());
-        mMainView.getMenu().getSaveMap().addActionListener(e -> onSaveMapClicked());
+        mMainView.getMenu().getSaveMap().addActionListener(e -> onSaveMapClicked(false));
+        mMainView.getMenu().getSaveCompMap().addActionListener(e -> onSaveMapClicked(true));
         mMainView.getMenu().getDefineColoring().addActionListener(e -> defineColoring());
+        mMainView.getMenu().getGenClasses().addActionListener(e -> onGenClassesClicked());
 
         mMainView.getPropertyView().getPick().addActionListener(e -> onPickClicked());
         mMainView.getPropertyView().getClone().addActionListener(e -> onCloneClicked());
@@ -222,7 +230,6 @@ public class MapDesigner {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setApproveButtonText("Load");
         fileChooser.setDialogTitle("Load Map");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("JavaChallenge Map File", "jcm"));
         int result = fileChooser.showOpenDialog(mMainView);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selected = fileChooser.getSelectedFile();
@@ -239,37 +246,39 @@ public class MapDesigner {
     public void loadMap(String json) {
         reset();
 
-        JsonObject root = Json.gson().fromJson(json, JsonElement.class).getAsJsonObject();
+        JsonObject root = Json.GSON.fromJson(json, JsonElement.class).getAsJsonObject();
 
-        map = Json.gson().fromJson(root.getAsJsonObject("map"), Map.class);
+        map = Json.GSON.fromJson(root.getAsJsonObject("map"), Map.class);
 
         JsonArray types = root.getAsJsonArray("objects");
         mTypes.clear();
         types.forEach(jt -> {
-            GameObjectType type = Json.gson().fromJson(jt, GameObjectType.class);
+            GameObjectType type = Json.GSON.fromJson(jt, GameObjectType.class);
             addObjectType(type.getName(), type);
         });
 
         // complete loading
         mTypes.forEach((n, t) -> {
             t.completeLoading();
-            map.foreachCell(Cell::completeLoading);
+            map.completeLoading();
             t.foreachObject(o -> map.at(o.getX(), o.getY()).addObject(o));
         });
 
         updateAll();
     }
 
-    private void onSaveMapClicked() {
+    private void onSaveMapClicked(boolean compressed) {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setApproveButtonText("Save");
         fileChooser.setDialogTitle("Save Map");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("JavaChallenge Map File", "jcm"));
         int result = fileChooser.showOpenDialog(mMainView);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selected = fileChooser.getSelectedFile();
             try {
-                Files.write(selected.toPath(), Json.gson().toJson(saveMap()).getBytes(ENCODING), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+                JsonElement root = saveMap();
+                String json = compressed ? Json.CGSON.toJson(root) : Json.GSON.toJson(root);
+                //System.out.println(MapParser.parse(json));
+                Files.write(selected.toPath(), json.getBytes(ENCODING), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(mMainView, e);
             }
@@ -279,10 +288,10 @@ public class MapDesigner {
     public JsonElement saveMap() {
         JsonObject root = new JsonObject();
 
-        root.add("map", Json.gson().toJsonTree(map));
+        root.add("map", Json.GSON.toJsonTree(map));
 
         JsonArray types = new JsonArray();
-        mTypes.forEach((n, t) -> types.add(Json.gson().toJsonTree(t)));
+        mTypes.forEach((n, t) -> types.add(Json.GSON.toJsonTree(t)));
         root.add("objects", types);
 
         return root;
@@ -506,6 +515,114 @@ public class MapDesigner {
             return false;
         }
         return true;
+    }
+
+    private void onGenClassesClicked() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setApproveButtonText("Save");
+        fileChooser.setDialogTitle("Generate Java Classes");
+        int result = fileChooser.showOpenDialog(mMainView);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selected = fileChooser.getSelectedFile();
+            String pckg = JOptionPane.showInputDialog(mMainView, "Enter package of classes");
+            if (pckg == null)
+                return;
+            try {
+                generateClasses(selected, pckg);
+            } catch (IOException | URISyntaxException e) {
+                JOptionPane.showMessageDialog(mMainView, e);
+            }
+        }
+    }
+
+    public void generateClasses(File zipFile, String pckg) throws IOException, URISyntaxException {
+        ZipOutputStream out = new ZipOutputStream(new FileOutputStream(zipFile));
+        // save map
+        JsonElement root = saveMap();
+        out.putNextEntry(new ZipEntry("map"));
+        out.write(Json.GSON.toJson(root).getBytes(ENCODING));
+        out.putNextEntry(new ZipEntry("map_compressed"));
+        out.write(Json.CGSON.toJson(root).getBytes(ENCODING));
+        // save map class
+        out.putNextEntry(new ZipEntry("Map.java"));
+        out.write(("package " + pckg + ";\n\n" + generateMapJava()).getBytes(ENCODING));
+        // save map parser
+        out.putNextEntry(new ZipEntry("MapParser.java"));
+        out.write(("package " + pckg + ";\n\n" + generateMapParserJava()).getBytes(ENCODING));
+        // save blocks
+        out.putNextEntry(new ZipEntry("Cell.java"));
+        out.write(("package " + pckg + ";\n\n" + generateCellJava()).getBytes(ENCODING));
+        // save objects
+        out.putNextEntry(new ZipEntry("GameObject.java"));
+        out.write(("package " + pckg + ";\n\n" + generateGameObjectJava()).getBytes(ENCODING));
+
+        Set<java.util.Map.Entry<String, String>> entrySet = generateObjectsJava().entrySet();
+        for (java.util.Map.Entry<String, String> e : entrySet) {
+            out.putNextEntry(new ZipEntry(e.getKey()));
+            out.write(("package " + pckg + ";\n\n" + e.getValue()).getBytes(ENCODING));
+        }
+        out.close();
+    }
+
+    private String generateMapJava() throws URISyntaxException, IOException {
+//        ClassGenerator gen = new ClassGenerator("Map", null);
+//        gen.addField("cells", "Cell[][]");
+//        gen.addMethod("at", new String[] {"int x", "int y"}, "Block", "return blocks[y][x];");
+//        return gen.toString();
+        byte[] bytes = Files.readAllBytes(Paths.get(MapParser.class.getResource("resources/Map").toURI()));
+        return new String(bytes, ENCODING);
+    }
+
+    private String generateMapParserJava() throws URISyntaxException, IOException {
+        byte[] bytes = Files.readAllBytes(Paths.get(MapParser.class.getResource("resources/MapParser").toURI()));
+        return new String(bytes, ENCODING);
+    }
+
+    private String generateGameObjectJava() throws URISyntaxException, IOException {
+//        ClassGenerator gen = new ClassGenerator("Game Object", null);
+//        gen.addField("x", "int");
+//        gen.addField("y", "int");
+//        return gen.toString();
+        byte[] bytes = Files.readAllBytes(Paths.get(MapParser.class.getResource("resources/GameObject").toURI()));
+        return new String(bytes, ENCODING);
+    }
+
+    private String generateCellJava() throws URISyntaxException, IOException {
+//        ClassGenerator gen = new ClassGenerator("Cell", null);
+//
+//        gen.addField("x", "int");
+//        gen.addField("y", "int");
+//        return gen.toString();
+        byte[] bytes = Files.readAllBytes(Paths.get(MapParser.class.getResource("resources/Cell").toURI()));
+        String str = new String(bytes, ENCODING);
+        StringBuilder sb = new StringBuilder();
+        String keys[] = map.getKeys();
+        for (String key : keys)
+            sb.append("\tprivate Number m").append(toCamelCase(key)).append(";\n");
+        return str.replace("/* fields */", sb.toString());
+    }
+
+    private HashMap<String, String> generateObjectsJava() {
+        HashMap<String, String> javaFiles = new HashMap<>();
+        mTypes.forEach((name, type) -> javaFiles.put(toCamelCase(name)+".java", getObjectJava(type)));
+        return javaFiles;
+    }
+
+    private String getObjectJava(GameObjectType type) {
+        ClassGenerator gen = new ClassGenerator(type.getName(), "game object");
+        gen.setHaveConstructor(false);
+        String[] keys = type.getKeys();
+        for (String key : keys)
+            gen.addField(key, "Number");
+        return gen.toString();
+    }
+
+    private String toCamelCase(String name) {
+        StringBuilder sb = new StringBuilder();
+        String[] parts = name.replaceAll("[^ a-zA-Z0-9]", "").split("\\s+");
+        for (String part : parts)
+            sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1).toLowerCase());
+        return sb.toString();
     }
 
 }
